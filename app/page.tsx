@@ -16,6 +16,7 @@ export default function HomePage() {
   const [bridgeConnected, setBridgeConnected] = useState(false);
   const [lastSave, setLastSave] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     // Check if setup is complete
@@ -24,6 +25,8 @@ export default function HomePage() {
       router.push('/setup');
       return;
     }
+
+    setIsReady(true);
 
     // Check bridge status
     checkBridgeConnection().then(setBridgeConnected);
@@ -49,6 +52,10 @@ export default function HomePage() {
   const handleReview = () => {
     router.push('/review');
   };
+
+  if (!isReady) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white px-4 py-8">
