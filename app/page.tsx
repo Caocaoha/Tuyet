@@ -36,7 +36,7 @@ export default function HomePage() {
         setTimeout(() => setShowToast(false), 3000);
       }
     });
-  }, [router]);
+  }, []);
 
   const handleStartRecording = () => {
     router.push('/recording');
