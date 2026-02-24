@@ -46,7 +46,7 @@ export default function SetupPage() {
       }
 
       // Lưu bridge config vào localStorage (không nhạy cảm)
-      localStorage.setItem('bridgeConfig', JSON.stringify({
+      localStorage.setItem('appConfig', JSON.stringify({
         bridgeUrl: bridgeUrl.replace(/\/$/, ''),
         bridgeApiKey,
         vaultPath: bridgeData.vaultPath,
