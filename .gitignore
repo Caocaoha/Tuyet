@@ -3,3 +3,5 @@
 desktop-bridge/node_modules/
 .env.local
 desktop-bridge/.env
+.vercel
+.env*.local
