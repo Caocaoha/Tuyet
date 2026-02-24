@@ -7,7 +7,7 @@ interface BridgeStatusProps {
 
 export default function BridgeStatus({ connected }: BridgeStatusProps) {
   return (
-    <div className="fixed bottom-4 right-4">
+    <div style={{ position: 'fixed', bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))', right: 16 }}>
       <div className={`flex items-center space-x-2 px-4 py-2 rounded-full shadow-md ${
         connected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
       }`}>

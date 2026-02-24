@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import BottomNav from '@/components/BottomNav';
 
 export const metadata: Metadata = {
   title: 'Tuyết — Voice Notes',
@@ -9,7 +10,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi">
-      <body>{children}</body>
+      <body style={{ paddingBottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}>
+        {children}
+        <BottomNav />
+      </body>
     </html>
   )
 }

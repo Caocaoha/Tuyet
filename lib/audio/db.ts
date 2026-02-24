@@ -6,7 +6,7 @@ export interface AudioRecord {
   audioBlob: Blob;
   duration: number;
   timestamp: string;
-  status: 'processing' | 'saved' | 'review_pending' | 'reviewed';
+  status: 'processing' | 'saved' | 'review_pending' | 'reviewed' | 'offline_pending' | 'error';
   transcriptId: string;
 }
 
@@ -19,7 +19,7 @@ export interface TranscriptRecord {
   lowConfidenceSegments: ConfidenceSegment[];
   savedToObsidian: boolean;
   obsidianFilePath: string;
-  createdAt: string;  // ← thêm field này
+  createdAt: string;
 }
 
 export interface ConfidenceSegment {
@@ -47,10 +47,22 @@ export interface SpeakerSegment {
   text: string;
 }
 
+export interface OfflineQueueItem {
+  id: string;
+  audioId: string;
+  audioBlob: Blob;
+  mimeType: string;
+  duration: number;
+  timestamp: string;
+  queuedAt: string;
+  retryCount: number;
+}
+
 class TuyetDatabase extends Dexie {
   audioRecords!: Table<AudioRecord, string>;
   transcripts!: Table<TranscriptRecord, string>;
   meetings!: Table<MeetingRecord, string>;
+  offlineQueue!: Table<OfflineQueueItem, string>;
 
   constructor() {
     super('TuyetDB');
@@ -59,11 +71,16 @@ class TuyetDatabase extends Dexie {
       transcripts: 'id, audioId, savedToObsidian',
       meetings: 'id, audioId, meetingDate, savedToObsidian'
     });
-    // Version 2: thêm index createdAt
     this.version(2).stores({
       audioRecords: 'id, timestamp, status',
       transcripts: 'id, audioId, savedToObsidian, createdAt',
       meetings: 'id, audioId, meetingDate, savedToObsidian'
+    });
+    this.version(3).stores({
+      audioRecords: 'id, timestamp, status',
+      transcripts: 'id, audioId, savedToObsidian, createdAt',
+      meetings: 'id, audioId, meetingDate, savedToObsidian',
+      offlineQueue: 'id, audioId, queuedAt'
     });
   }
 }
@@ -81,7 +98,7 @@ export async function saveTranscript(transcript: Omit<TranscriptRecord, 'id'>): 
   await db.transcripts.add({
     ...transcript,
     id,
-    createdAt: transcript.createdAt || new Date().toISOString(), // ← luôn có timestamp
+    createdAt: transcript.createdAt || new Date().toISOString(),
   });
   return id;
 }
@@ -98,4 +115,59 @@ export async function getPendingReviews(): Promise<TranscriptRecord[]> {
     .where('status').equals('review_pending').toArray();
   const ids = audioRecords.map(r => r.transcriptId);
   return db.transcripts.where('id').anyOf(ids).toArray();
+}
+
+// Offline Queue helpers
+
+export async function saveToOfflineQueue(
+  audioBlob: Blob, mimeType: string, duration: number, timestamp: string
+): Promise<string> {
+  const id = crypto.randomUUID();
+  const audioId = crypto.randomUUID();
+  await db.audioRecords.add({
+    id: audioId, audioBlob, duration, timestamp,
+    status: 'offline_pending', transcriptId: '',
+  });
+  await db.offlineQueue.add({
+    id, audioId, audioBlob, mimeType, duration, timestamp,
+    queuedAt: new Date().toISOString(),
+    retryCount: 0,
+  });
+  return id;
+}
+
+export async function getOfflineQueue(): Promise<OfflineQueueItem[]> {
+  return db.offlineQueue.orderBy('queuedAt').toArray();
+}
+
+export async function removeFromOfflineQueue(id: string): Promise<void> {
+  await db.offlineQueue.delete(id);
+}
+
+export async function incrementRetryCount(id: string): Promise<void> {
+  const item = await db.offlineQueue.get(id);
+  if (item) {
+    await db.offlineQueue.update(id, { retryCount: item.retryCount + 1 });
+  }
+}
+
+// F5: Update a low-confidence segment text and reflect in main transcript
+export async function updateTranscriptSegment(
+  transcriptId: string, segmentIndex: number, correctedText: string
+): Promise<void> {
+  const record = await db.transcripts.get(transcriptId);
+  if (!record) return;
+
+  const segments = [...(record.lowConfidenceSegments || [])];
+  if (segmentIndex < 0 || segmentIndex >= segments.length) return;
+
+  const oldText = segments[segmentIndex].text;
+  segments[segmentIndex] = { ...segments[segmentIndex], text: correctedText };
+
+  const updatedTranscript = record.transcript.replace(oldText, correctedText);
+
+  await db.transcripts.update(transcriptId, {
+    lowConfidenceSegments: segments,
+    transcript: updatedTranscript,
+  });
 }

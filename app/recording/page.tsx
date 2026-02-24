@@ -10,7 +10,11 @@ function fmt(s: number) {
 
 export default function RecordingPage() {
   const router = useRouter();
-  const { isRecording, isProcessing, status, duration, transcript, error, startRecording, stopRecording } = useRecorder();
+  const {
+    isRecording, isProcessing, status, duration, transcript, error,
+    voiceCommandDetected,
+    startRecording, stopRecording
+  } = useRecorder();
 
   useEffect(() => { startRecording(); }, []);
 
@@ -40,12 +44,28 @@ export default function RecordingPage() {
           {' '}{fmt(duration)}
         </div>
 
-        <div style={{ fontSize:14, color:'#888', marginBottom:40, minHeight:20 }}>
-          {isRecording && 'Đang ghi âm — bấm nút hoặc nói "Dừng lại và Lưu" để dừng'}
+        <div style={{ fontSize:14, color:'#888', marginBottom:24, minHeight:20 }}>
+          {isRecording && 'Đang ghi âm — bấm nút hoặc nói "Save" / "Stop" để dừng'}
           {isProcessing && 'Đang xử lý với Whisper AI...'}
           {status === 'saved' && '✅ Đã lưu vào Obsidian! Đang về trang chủ...'}
           {status === 'error' && ''}
         </div>
+
+        {/* Voice command detected banner */}
+        {voiceCommandDetected && (
+          <div style={{
+            marginBottom: 16,
+            padding: '10px 16px',
+            background: '#f0fff4',
+            border: '1px solid #9ae6b4',
+            borderRadius: 8,
+            color: '#276749',
+            fontSize: 14,
+            fontWeight: 500,
+          }}>
+            Voice command detected: &quot;{voiceCommandDetected}&quot; — stopping...
+          </div>
+        )}
 
         {/* Nút dừng */}
         <button

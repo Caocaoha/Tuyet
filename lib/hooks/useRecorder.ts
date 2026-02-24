@@ -1,12 +1,14 @@
 // lib/hooks/useRecorder.ts
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { AudioRecorder } from '@/lib/audio/recorder';
-import { saveAudioRecord, saveTranscript } from '@/lib/audio/db';
+import { saveAudioRecord, saveTranscript, saveToOfflineQueue } from '@/lib/audio/db';
 import { transcribeAudio } from '@/lib/whisper/client';
 import { saveNoteToObsidian } from '@/lib/obsidian/bridge';
 import { detectTags, removeTagCommands } from '@/lib/tags/detector';
 
 export type RecordingStatus = 'idle' | 'recording' | 'processing' | 'saved' | 'error';
+
+const VOICE_STOP_KEYWORDS = ['save', 'stop'];
 
 export function useRecorder() {
   const [status, setStatus] = useState<RecordingStatus>('idle');
@@ -14,11 +16,13 @@ export function useRecorder() {
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [obsidianSaved, setObsidianSaved] = useState(false);
+  const [voiceCommandDetected, setVoiceCommandDetected] = useState<string | null>(null);
 
   const recorderRef = useRef<AudioRecorder | null>(null);
   const timerRef = useRef<number | null>(null);
   const recognitionRef = useRef<any>(null);
   const stoppingRef = useRef(false);
+  const voiceCommandRef = useRef(false);
 
   const startRecording = useCallback(async () => {
     try {
@@ -26,7 +30,9 @@ export function useRecorder() {
       setTranscript('');
       setDuration(0);
       setObsidianSaved(false);
+      setVoiceCommandDetected(null);
       stoppingRef.current = false;
+      voiceCommandRef.current = false;
 
       const recorder = new AudioRecorder();
       await recorder.start();
@@ -43,6 +49,14 @@ export function useRecorder() {
         recognition.lang = 'vi-VN';
         recognition.onresult = (event: any) => {
           for (let i = event.resultIndex; i < event.results.length; i++) {
+            const text = event.results[i][0].transcript.toLowerCase().trim();
+            // Voice command detection — scan all results (interim + final)
+            if (!voiceCommandRef.current && VOICE_STOP_KEYWORDS.some(kw => text.includes(kw))) {
+              voiceCommandRef.current = true;
+              setVoiceCommandDetected(event.results[i][0].transcript.trim());
+              setTimeout(() => stopRecording(), 300);
+              return;
+            }
             if (event.results[i].isFinal) {
               setTranscript(prev => (prev + ' ' + event.results[i][0].transcript).trim());
             }
@@ -76,7 +90,15 @@ export function useRecorder() {
       const now = new Date();
       const timestamp = now.toISOString();
 
-      // Lưu audio
+      // Offline path — queue for later processing
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        await saveToOfflineQueue(blob, mimeType, duration, timestamp);
+        setError('Offline — ghi âm đã lưu. Sẽ xử lý khi có mạng.');
+        setStatus('saved');
+        return;
+      }
+
+      // Online path
       const audioId = await saveAudioRecord({
         audioBlob: blob, duration,
         timestamp, status: 'processing', transcriptId: ''
@@ -97,7 +119,7 @@ export function useRecorder() {
         lowConfidenceSegments: whisperResult.segments.filter(s => s.confidence < 0.7),
         savedToObsidian: false,
         obsidianFilePath: '',
-        createdAt: timestamp,  // ← luôn có timestamp
+        createdAt: timestamp,
       });
 
       const { db } = await import('@/lib/audio/db');
@@ -105,7 +127,7 @@ export function useRecorder() {
 
       // Lưu vào Obsidian
       const obsidianResult = await saveNoteToObsidian(cleanTranscript, detectedTags, now);
-      
+
       if (obsidianResult.success) {
         await db.transcripts.update(transcriptId, {
           savedToObsidian: true,
@@ -114,7 +136,6 @@ export function useRecorder() {
         await db.audioRecords.update(audioId, { status: 'saved' });
         setObsidianSaved(true);
       } else {
-        // Lưu local thành công nhưng Obsidian thất bại — không crash
         await db.audioRecords.update(audioId, { status: 'saved' });
         setError(`Đã lưu local. Obsidian lỗi: ${obsidianResult.error}`);
       }
@@ -138,6 +159,7 @@ export function useRecorder() {
     isRecording: status === 'recording',
     isProcessing: status === 'processing',
     status, duration, transcript, error, obsidianSaved,
+    voiceCommandDetected,
     startRecording, stopRecording
   };
 }
