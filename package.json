@@ -1,0 +1,28 @@
+{
+  "name": "tuyet-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3008",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "dexie": "^3.2.4",
+    "dexie-react-hooks": "^1.1.7",
+    "next": "14.2.0",
+    "openai": "^6.24.0",
+    "react": "^18",
+    "react-dom": "^18",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.0",
+    "typescript": "^5"
+  }
+}
