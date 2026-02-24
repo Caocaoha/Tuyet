@@ -13,11 +13,35 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { audio, mimeType } = requestSchema.parse(body);
 
+    // Check size limit (Vercel 4.5MB limit)
+    const audioBuffer = Buffer.from(audio, 'base64');
+    const sizeMB = audioBuffer.length / (1024 * 1024);
+    if (sizeMB > 4) {
+      return NextResponse.json(
+        {
+          error: 'Audio file too large',
+          code: 'SIZE_LIMIT_EXCEEDED',
+          details: `File size: ${sizeMB.toFixed(2)}MB (max 4MB)`
+        },
+        { status: 413 }
+      );
+    }
+
+    // Check OpenAI API key
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('OPENAI_API_KEY not set');
+      return NextResponse.json(
+        {
+          error: 'Server misconfigured',
+          code: 'API_KEY_MISSING'
+        },
+        { status: 500 }
+      );
+    }
+
     // Khởi tạo bên trong function để tránh lỗi lúc build
     const OpenAI = (await import('openai')).default;
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-    const audioBuffer = Buffer.from(audio, 'base64');
     const ext = getExtensionFromMimeType(mimeType);
     const file = new File([audioBuffer], `audio.${ext}`, { type: mimeType });
 
@@ -44,9 +68,18 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Transcription error:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Transcription error:', {
+      message: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+      apiKeyExists: !!process.env.OPENAI_API_KEY,
+    });
     return NextResponse.json(
-      { error: 'Transcription failed', code: 'TRANSCRIBE_ERROR' },
+      {
+        error: 'Transcription failed',
+        code: 'TRANSCRIBE_ERROR',
+        details: errorMessage
+      },
       { status: 500 }
     );
   }
