@@ -16,6 +16,7 @@ export function useRecorder() {
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [obsidianSaved, setObsidianSaved] = useState(false);
+  const [offlineSaved, setOfflineSaved] = useState(false);
   const [voiceCommandDetected, setVoiceCommandDetected] = useState<string | null>(null);
 
   const recorderRef = useRef<AudioRecorder | null>(null);
@@ -30,6 +31,7 @@ export function useRecorder() {
       setTranscript('');
       setDuration(0);
       setObsidianSaved(false);
+      setOfflineSaved(false);
       setVoiceCommandDetected(null);
       stoppingRef.current = false;
       voiceCommandRef.current = false;
@@ -93,7 +95,7 @@ export function useRecorder() {
       // Offline path — queue for later processing
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         await saveToOfflineQueue(blob, mimeType, duration, timestamp);
-        setError('Offline — ghi âm đã lưu. Sẽ xử lý khi có mạng.');
+        setOfflineSaved(true);
         setStatus('saved');
         return;
       }
@@ -158,7 +160,7 @@ export function useRecorder() {
   return {
     isRecording: status === 'recording',
     isProcessing: status === 'processing',
-    status, duration, transcript, error, obsidianSaved,
+    status, duration, transcript, error, obsidianSaved, offlineSaved,
     voiceCommandDetected,
     startRecording, stopRecording
   };

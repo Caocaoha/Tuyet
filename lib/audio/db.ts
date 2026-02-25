@@ -20,6 +20,7 @@ export interface TranscriptRecord {
   savedToObsidian: boolean;
   obsidianFilePath: string;
   createdAt: string;
+  bookmarked?: boolean;
 }
 
 export interface ConfidenceSegment {
@@ -79,6 +80,12 @@ class TuyetDatabase extends Dexie {
     this.version(3).stores({
       audioRecords: 'id, timestamp, status',
       transcripts: 'id, audioId, savedToObsidian, createdAt',
+      meetings: 'id, audioId, meetingDate, savedToObsidian',
+      offlineQueue: 'id, audioId, queuedAt'
+    });
+    this.version(4).stores({
+      audioRecords: 'id, timestamp, status',
+      transcripts: 'id, audioId, savedToObsidian, createdAt, bookmarked',
       meetings: 'id, audioId, meetingDate, savedToObsidian',
       offlineQueue: 'id, audioId, queuedAt'
     });
@@ -149,6 +156,25 @@ export async function incrementRetryCount(id: string): Promise<void> {
   if (item) {
     await db.offlineQueue.update(id, { retryCount: item.retryCount + 1 });
   }
+}
+
+// Bookmark helpers
+
+export async function bookmarkTranscript(id: string, bookmarked: boolean): Promise<void> {
+  await db.transcripts.update(id, { bookmarked });
+}
+
+export async function cleanupExpiredRecords(): Promise<number> {
+  const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+  const expired = await db.transcripts
+    .filter(t => t.bookmarked !== true && (t.createdAt || '') < fiveDaysAgo)
+    .toArray();
+  if (expired.length === 0) return 0;
+  const expiredIds = expired.map(t => t.id);
+  const audioIds = expired.map(t => t.audioId).filter(Boolean);
+  await db.transcripts.bulkDelete(expiredIds);
+  if (audioIds.length > 0) await db.audioRecords.bulkDelete(audioIds);
+  return expired.length;
 }
 
 // F5: Update a low-confidence segment text and reflect in main transcript

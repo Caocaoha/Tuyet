@@ -11,7 +11,7 @@ function fmt(s: number) {
 export default function RecordingPage() {
   const router = useRouter();
   const {
-    isRecording, isProcessing, status, duration, transcript, error,
+    isRecording, isProcessing, status, duration, transcript, error, offlineSaved,
     voiceCommandDetected,
     startRecording, stopRecording
   } = useRecorder();
@@ -50,6 +50,21 @@ export default function RecordingPage() {
           {status === 'saved' && '✅ Đã lưu vào Obsidian! Đang về trang chủ...'}
           {status === 'error' && ''}
         </div>
+
+        {/* Offline saved banner */}
+        {offlineSaved && (
+          <div style={{
+            marginBottom: 16,
+            padding: '10px 16px',
+            background: '#f0fff4',
+            border: '1px solid #9ae6b4',
+            borderRadius: 8,
+            color: '#276749',
+            fontSize: 14,
+          }}>
+            📶 Không có mạng — ghi âm đã lưu, sẽ xử lý khi có kết nối.
+          </div>
+        )}
 
         {/* Voice command detected banner */}
         {voiceCommandDetected && (

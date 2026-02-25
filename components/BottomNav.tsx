@@ -3,9 +3,9 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 
 const NAV_ITEMS = [
-  { href: '/', label: 'Trang chủ', emoji: '🏠' },
+  { href: '/', label: 'Lịch sử', emoji: '📝' },
   { href: '/recording', label: 'Ghi âm', emoji: '🎙️', isCenter: true },
-  { href: '/review', label: 'Xem lại', emoji: '📝' },
+  { href: '/setup', label: 'Cài đặt', emoji: '⚙️' },
 ];
 
 const HIDDEN_ROUTES = ['/recording', '/setup'];
