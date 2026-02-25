@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
           'x-api-key': bridgeKey,
         },
         body: JSON.stringify({ username }),
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(30000),
       });
     } catch (fetchErr) {
       return NextResponse.json(

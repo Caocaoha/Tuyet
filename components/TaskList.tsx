@@ -58,10 +58,12 @@ export default function TaskList() {
   }
 
   const now = new Date().toISOString();
-  const overdueTasks = tasks.filter(t => !t.completed && t.dueDate && t.dueDate < now);
-  const upcomingTasks = tasks.filter(t => !t.completed && t.dueDate && t.dueDate >= now);
+  const activeTasks = tasks.filter(t => !t.completed);
+  const overdueTasks = activeTasks.filter(t => t.dueDate && t.dueDate < now);
+  const upcomingTasks = activeTasks.filter(t => t.dueDate && t.dueDate >= now);
+  const noDateTasks = activeTasks.filter(t => !t.dueDate);
 
-  if (tasks.length === 0) {
+  if (activeTasks.length === 0) {
     return (
       <div className="bg-gray-50 rounded-lg p-6 text-center">
         <p className="text-gray-600">Không có task nào</p>
@@ -69,25 +71,30 @@ export default function TaskList() {
     );
   }
 
+  const TaskCard = ({ task, borderColor = 'border-gray-200' }: { task: Task; borderColor?: string }) => (
+    <div
+      key={task.id}
+      className={`bg-white rounded p-3 border ${borderColor} ${task.obsidianUrl ? 'cursor-pointer hover:border-blue-400' : ''} transition-colors`}
+      onClick={() => task.obsidianUrl && openInObsidian(task.obsidianUrl)}
+    >
+      <p className="text-sm text-gray-800">{task.content}</p>
+      <p className="text-xs text-gray-400 mt-1">{task.sourceNote}</p>
+      {task.dueDate && (
+        <p className="text-xs text-gray-500 mt-0.5">
+          {new Date(task.dueDate).toLocaleDateString('vi-VN')}
+        </p>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       {overdueTasks.length > 0 && (
         <div className="bg-red-50 rounded-lg p-4">
           <h3 className="font-semibold text-red-800 mb-2">Quá hạn ({overdueTasks.length})</h3>
           <div className="space-y-2">
-            {overdueTasks.map(task => (
-              <div
-                key={task.id}
-                className="bg-white rounded p-3 border border-red-200 cursor-pointer hover:border-red-400 transition-colors"
-                onClick={() => openInObsidian(task.obsidianUrl)}
-              >
-                <p className="text-sm text-gray-800">{task.content}</p>
-                {task.dueDate && (
-                  <p className="text-xs text-red-600 mt-1">
-                    {new Date(task.dueDate).toLocaleDateString('vi-VN')}
-                  </p>
-                )}
-              </div>
+            {overdueTasks.map((task, i) => (
+              <TaskCard key={task.id || i} task={task} borderColor="border-red-200" />
             ))}
           </div>
         </div>
@@ -97,19 +104,19 @@ export default function TaskList() {
         <div className="bg-white rounded-lg shadow p-4">
           <h3 className="font-semibold text-gray-800 mb-2">Sắp tới ({upcomingTasks.length})</h3>
           <div className="space-y-2">
-            {upcomingTasks.map(task => (
-              <div
-                key={task.id}
-                className="bg-gray-50 rounded p-3 border border-gray-200 cursor-pointer hover:border-blue-400 transition-colors"
-                onClick={() => openInObsidian(task.obsidianUrl)}
-              >
-                <p className="text-sm text-gray-800">{task.content}</p>
-                {task.dueDate && (
-                  <p className="text-xs text-gray-600 mt-1">
-                    {new Date(task.dueDate).toLocaleDateString('vi-VN')}
-                  </p>
-                )}
-              </div>
+            {upcomingTasks.map((task, i) => (
+              <TaskCard key={task.id || i} task={task} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {noDateTasks.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-4">
+          <h3 className="font-semibold text-gray-800 mb-2">Cần làm ({noDateTasks.length})</h3>
+          <div className="space-y-2">
+            {noDateTasks.map((task, i) => (
+              <TaskCard key={task.id || i} task={task} />
             ))}
           </div>
         </div>
