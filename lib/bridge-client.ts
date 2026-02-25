@@ -9,13 +9,14 @@ export async function testBridgeConnection(
   bridgeUrl: string,
   bridgeKey: string
 ): Promise<BridgeHealthResponse> {
-  const url = `${bridgeUrl.replace(/\/$/, '')}/health`;
-  
+  // Proxy via server-side API to avoid ngrok browser interstitial (returns HTML, not JSON)
   try {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'x-api-key': bridgeKey },
-      signal: AbortSignal.timeout(5000),
+    const response = await fetch('/api/config/test-bridge', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bridgeUrl, bridgeKey }),
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!response.ok) {
