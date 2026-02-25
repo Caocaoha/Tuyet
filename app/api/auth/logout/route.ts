@@ -1,8 +1,7 @@
-// app/api/auth/logout/route.ts
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST() {
-  const res = NextResponse.json({ success: true });
-  res.cookies.delete('tuyet_session');
-  return res;
+export async function POST(req: NextRequest) {
+  const response = NextResponse.json({ success: true });
+  response.cookies.delete('tuyet_user');
+  return response;
 }

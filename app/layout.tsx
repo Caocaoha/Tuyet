@@ -1,19 +1,30 @@
-import type { Metadata } from 'next'
-import BottomNav from '@/components/BottomNav';
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Tuyết — Voice Notes',
-  description: 'Voice recording app with Obsidian integration',
+  title: 'Tuyết v2 — Knowledge Assistant',
+  description: 'Voice to Obsidian with AI intelligence',
   manifest: '/manifest.json',
-}
+  themeColor: '#3b82f6',
+  viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Tuyết',
+  },
+};
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="vi">
-      <body style={{ paddingBottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}>
-        {children}
-        <BottomNav />
-      </body>
+      <body className={inter.className}>{children}</body>
     </html>
-  )
+  );
 }

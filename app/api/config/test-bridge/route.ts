@@ -1,62 +1,51 @@
-// app/api/config/test-bridge/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 
-const requestSchema = z.object({
-  bridgeUrl: z.string().url(),
-  apiKey: z.string().min(1)
-});
-
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json();
-    const { bridgeUrl, apiKey } = requestSchema.parse(body);
+    const body = await req.json();
+    const { bridgeUrl, bridgeKey } = body;
 
-    console.log('test-bridge: calling', `${bridgeUrl}/health`);
+    if (!bridgeUrl || !bridgeKey) {
+      return NextResponse.json(
+        { error: 'bridgeUrl and bridgeKey are required' },
+        { status: 400 }
+      );
+    }
+
+    const url = `${bridgeUrl.replace(/\/$/, '')}/health`;
 
     let response: Response;
     try {
-      response = await fetch(`${bridgeUrl}/health`, {
-        headers: { 'x-api-key': apiKey },
-        signal: AbortSignal.timeout(5000)
+      response = await fetch(url, {
+        method: 'GET',
+        headers: { 'x-api-key': bridgeKey },
+        signal: AbortSignal.timeout(5000),
       });
-    } catch (fetchError) {
-      console.error('test-bridge fetch error:', fetchError);
+    } catch (fetchErr) {
       return NextResponse.json({
-        success: false,
-        error: `Không thể reach Bridge: ${(fetchError as Error).message}`
+        status: 'error',
+        error: `Network error: ${(fetchErr as Error).message}`,
       });
     }
-
-    const text = await response.text();
-    console.log('test-bridge response:', response.status, text);
 
     if (!response.ok) {
+      const text = await response.text();
       return NextResponse.json({
-        success: false,
-        error: `Bridge trả về ${response.status}: ${text}`
+        status: 'error',
+        error: `HTTP ${response.status}: ${text}`,
       });
     }
 
-    const data = JSON.parse(text);
-
-    if (!data.obsidianConnected) {
-      return NextResponse.json({
-        success: false,
-        error: `Bridge kết nối OK nhưng Obsidian chưa connect. VaultPath: ${data.vaultPath}`
-      });
-    }
-
+    const result = await response.json();
     return NextResponse.json({
-      success: true,
-      vaultPath: data.vaultPath
+      status: 'ok',
+      version: result.version,
+      obsidianConnected: result.obsidianConnected,
     });
-
-  } catch (error) {
-    console.error('test-bridge error:', error);
-    return NextResponse.json({
-      success: false,
-      error: (error as Error).message
-    });
+  } catch (err) {
+    return NextResponse.json(
+      { status: 'error', error: (err as Error).message },
+      { status: 500 }
+    );
   }
 }

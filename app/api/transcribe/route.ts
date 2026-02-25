@@ -1,110 +1,97 @@
-// app/api/transcribe/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 
-const requestSchema = z.object({
-  audio: z.string(),
-  mimeType: z.string()
-});
-
-// Không khởi tạo OpenAI ở module level — chỉ khởi tạo trong function
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json();
-    const { audio, mimeType } = requestSchema.parse(body);
+    const body = await req.json();
+    const { audio, mimeType, engine = 'soniox' } = body;
 
-    // Check size limit (Vercel 4.5MB limit)
-    const audioBuffer = Buffer.from(audio, 'base64');
-    const sizeMB = audioBuffer.length / (1024 * 1024);
-    if (sizeMB > 4) {
+    if (!audio || typeof audio !== 'string') {
       return NextResponse.json(
-        {
-          error: 'Audio file too large',
-          code: 'SIZE_LIMIT_EXCEEDED',
-          details: `File size: ${sizeMB.toFixed(2)}MB (max 4MB)`
-        },
-        { status: 413 }
+        { error: 'Audio data (base64) is required' },
+        { status: 400 }
       );
     }
 
-    // Check OpenAI API key
-    const apiKey = (process.env.OPENAI_API_KEY || '').trim();
-    if (!apiKey) {
-      console.error('OPENAI_API_KEY not set');
+    const enableSoniox = process.env.NEXT_PUBLIC_ENABLE_SONIOX === 'true';
+    const actualEngine = enableSoniox && engine === 'soniox' ? 'soniox' : 'whisper';
+
+    if (actualEngine === 'soniox') {
+      const sonioxKey = process.env.SONIOX_API_KEY;
+      if (!sonioxKey) {
+        return NextResponse.json(
+          { error: 'Soniox API key not configured' },
+          { status: 500 }
+        );
+      }
+
+      const audioBuffer = Buffer.from(audio, 'base64');
+
+      let response: Response;
+      try {
+        response = await fetch('https://api.soniox.com/transcribe-async', {
+          method: 'POST',
+          headers: {
+            'Authorization': `ApiKey ${sonioxKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            audio: audio,
+            model: 'vi_v2',
+            enable_streaming: false,
+          }),
+          signal: AbortSignal.timeout(60000),
+        });
+      } catch (fetchErr) {
+        return NextResponse.json(
+          { error: `Soniox unreachable: ${(fetchErr as Error).message}` },
+          { status: 503 }
+        );
+      }
+
+      if (!response.ok) {
+        const text = await response.text();
+        return NextResponse.json(
+          { error: `Soniox error ${response.status}: ${text}` },
+          { status: 502 }
+        );
+      }
+
+      const result = await response.json();
+      return NextResponse.json({
+        transcript: result.transcript || result.text || '',
+        engine: 'soniox',
+        confidence: result.confidence,
+      });
+    }
+
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) {
       return NextResponse.json(
-        {
-          error: 'Server misconfigured',
-          code: 'API_KEY_MISSING'
-        },
+        { error: 'OpenAI API key not configured' },
         { status: 500 }
       );
     }
 
-    // Validate API key format
-    if (!apiKey.startsWith('sk-')) {
-      console.error('OPENAI_API_KEY invalid format:', apiKey.substring(0, 50));
-      return NextResponse.json(
-        {
-          error: 'Invalid API key format',
-          code: 'API_KEY_INVALID'
-        },
-        { status: 500 }
-      );
-    }
-
-    // Khởi tạo bên trong function để tránh lỗi lúc build
     const OpenAI = (await import('openai')).default;
-    const openai = new OpenAI({ apiKey });
-    const ext = getExtensionFromMimeType(mimeType);
-    const file = new File([audioBuffer], `audio.${ext}`, { type: mimeType });
+    const openai = new OpenAI({ apiKey: openaiKey });
+
+    const audioBuffer = Buffer.from(audio, 'base64');
+    const file = new File([audioBuffer], 'audio.webm', { type: mimeType });
 
     const transcription = await openai.audio.transcriptions.create({
       file,
       model: 'whisper-1',
-      response_format: 'verbose_json',
-      timestamp_granularities: ['segment']
+      language: 'vi',
     });
-
-    const segments = (transcription as any).segments?.map((seg: any) => ({
-      startMs: Math.floor(seg.start * 1000),
-      endMs: Math.floor(seg.end * 1000),
-      text: seg.text,
-      confidence: seg.avg_logprob ? Math.exp(seg.avg_logprob) : 0.9
-    })) || [];
-
-    const detectedLanguage = (transcription as any).language === 'vietnamese' ? 'vi' : 'en';
 
     return NextResponse.json({
       transcript: transcription.text,
-      detectedLanguage,
-      segments
+      engine: 'whisper',
     });
-
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('Transcription error:', {
-      message: errorMessage,
-      stack: error instanceof Error ? error.stack : undefined,
-      apiKeyExists: !!process.env.OPENAI_API_KEY,
-    });
+  } catch (err) {
     return NextResponse.json(
-      {
-        error: 'Transcription failed',
-        code: 'TRANSCRIBE_ERROR',
-        details: errorMessage
-      },
+      { error: `Transcription failed: ${(err as Error).message}` },
       { status: 500 }
     );
   }
-}
-
-function getExtensionFromMimeType(mimeType: string): string {
-  const map: Record<string, string> = {
-    'audio/webm': 'webm',
-    'audio/ogg': 'ogg',
-    'audio/mp4': 'mp4',
-    'audio/wav': 'wav',
-    'audio/mpeg': 'mp3'
-  };
-  return map[mimeType] || 'webm';
 }

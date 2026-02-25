@@ -1,0 +1,4 @@
+Task 25/02/2026
+- Cải tiến giao diện chính khi lưu offline: 1) bỏ qua phần thông báo lỗi, chỉ báo lưu offline. 2) với bản ghi không lưu về server do không kết nối được, thì khi co ket noi lai thì người dùng vuốt xuống để lưu về (trên điện thoại), và có nút ấn nhỏ bên cạnh mỗi bản ghi để đẩy về server.
+- Giáo diện default của ứng dụng nên là phần lịch sử/review để xem qua lại các thông tin cũ.
+- Chỉ lưu lại những cái được bookmark Nếu không được bookmark thì chỉ lưu trong vòng 5 ngày Pain point của việc cài đặt này rất lớn.

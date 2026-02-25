@@ -1,0 +1,155 @@
+project: "tuyet-v2"
+version: "2.0.0"
+phase: "P1 — Obsidian Intelligence"
+iteration: "I1"
+date: "2026-02-25"
+
+developer_notes: |
+  Complete implementation of Tuyết v2 Phase 1 per Architecture Document.
+  
+  Key decisions:
+  - Soniox init inside POST function (not module-level)
+  - Multi-user via cookie routing, no server DB
+  - IndexedDB schema v2 with intelligence fields
+  - Desktop Bridge unchanged from v1, new routes added server-side
+  - Feature flags via NEXT_PUBLIC_ENABLE_* env vars
+  - All SDK clients initialized inside functions
+  - Task reminder integrated into home page (not separate phase)
+
+layers:
+  foundation:
+    status: "complete"
+    files:
+      - path: "tsconfig.json"
+        note: "target es2017, exclude desktop-bridge"
+      - path: "package.json"
+        note: "Next.js 14.2.18, Dexie v3, no experimental flags"
+      - path: "next.config.js"
+        note: "Minimal config, no custom webpack"
+      - path: ".env.example"
+        note: "All env vars with descriptive comments"
+      - path: ".gitignore"
+        note: "Excludes desktop-bridge, .env files"
+      - path: "tailwind.config.js"
+      - path: "postcss.config.js"
+
+  data_types:
+    status: "complete"
+    files:
+      - path: "lib/types.ts"
+        note: "All interfaces exported, includes P1 intelligence fields"
+      - path: "lib/audio/db.ts"
+        note: "Dexie v2 schema with migration, per-user db naming"
+
+  core_services:
+    status: "complete"
+    files:
+      - path: "lib/api-client.ts"
+        note: "All client functions with credentials: include, timeout handling"
+      - path: "lib/bridge-client.ts"
+        note: "Test connection, generate key, save/load config (localStorage)"
+      - path: "lib/recorder.ts"
+        note: "AudioRecorder class with pause/resume, cleanup"
+
+  api_routes:
+    status: "complete"
+    files:
+      - path: "app/api/auth/login/route.ts"
+        note: "Username validation, cookie set with tuyet_user={username}"
+      - path: "app/api/auth/logout/route.ts"
+        note: "Cookie delete"
+      - path: "app/api/transcribe/route.ts"
+        note: "Soniox primary, Whisper fallback, SDK init inside function"
+      - path: "app/api/intelligence/auto-tag/route.ts"
+        note: "Claude analyze, feature flag check"
+      - path: "app/api/intelligence/report/route.ts"
+        note: "Multi-type reports (topic/daily/weekly), Claude summarization"
+      - path: "app/api/obsidian/note/route.ts"
+        note: "Save with auto-link via Smart Connections bridge call"
+      - path: "app/api/tasks/route.ts"
+        note: "Fetch tasks from bridge (Dataview parse server-side)"
+      - path: "app/api/config/test-bridge/route.ts"
+        note: "Public route for setup flow"
+
+  middleware_config:
+    status: "complete"
+    files:
+      - path: "middleware.ts"
+        note: "Cookie-based auth, PUBLIC_ROUTES includes setup paths"
+      - path: "public/manifest.json"
+        note: "PWA config, display: standalone"
+      - path: "app/globals.css"
+        note: "Tailwind directives, dark mode support"
+      - path: "app/layout.tsx"
+        note: "Root layout, PWA meta tags"
+
+  components:
+    status: "complete"
+    files:
+      - path: "components/MicButton.tsx"
+        note: "Record/pause/resume/stop, stoppingRef prevents double-stop"
+      - path: "components/TaskList.tsx"
+        note: "Fetch tasks on mount, split overdue/upcoming, obsidian:// links"
+
+  pages:
+    status: "complete"
+    files:
+      - path: "app/page.tsx"
+        note: "Home with recording + task list, status-based UI, no navigate until saved"
+      - path: "app/setup/page.tsx"
+        note: "Two-step: user login → bridge config, test connection, generate key"
+      - path: "app/reports/page.tsx"
+        note: "Three report types, generate via Claude, obsidian:// links"
+
+assumptions:
+  - "Soniox API uses Authorization: ApiKey header (not x-api-key)"
+  - "Smart Connections plugin exposes /smart-connections/search endpoint via Obsidian Local REST API"
+  - "Desktop Bridge adds /search and /tasks routes without breaking existing v1 routes"
+  - "Task parsing done server-side in Bridge using Dataview query"
+  - "Task reminder is NOT a separate phase — integrated into home page (P1)"
+  - "Recording only stops when user clicks stop — no VAD"
+  - "Multi-user isolation via IndexedDB per-user database + vault folders"
+  - "No sync between devices — each device is independent workspace"
+
+escalations: []
+
+production_readiness_checklist:
+  sdk_init: "✓ All SDK init inside functions (Soniox, Claude, OpenAI)"
+  env_variables: "✓ All process.env reads match .env.example keys"
+  localhost: "✓ No hardcoded localhost URLs, all use process.env with fallback"
+  tsconfig: "✓ target es2017, exclude desktop-bridge, strict mode"
+  next_config: "✓ No deprecated experimental options"
+  desktop_bridge: "N/A — not modified in this iteration, assumed working from v1"
+  imports: "✓ All imports resolve to existing files"
+  interface_names: "✓ Consistent naming across files"
+  route_paths: "✓ All client fetch paths have corresponding route.ts files"
+  env_names: "✓ All env var names consistent"
+  auth: "✓ Setup routes in PUBLIC_ROUTES, credentials: include in client"
+  error_handling: "✓ Network errors vs HTTP errors distinguished"
+  placeholders: "✓ No TODOs, no stubs, no placeholders"
+
+testing_notes: |
+  Sprint 1 includes Soniox quality gate test:
+  - Record 10 samples tiếng Việt (mixed speeds, accents)
+  - Measure WER (Word Error Rate)
+  - BLOCKER: If WER >10%, fallback to Whisper only
+  - If WER ≤10%, proceed with Soniox as primary engine
+  
+  Test coverage target: ≥70% for core services (api-client, recorder, db)
+  E2E test: setup → record → auto-tag → save → task display
+
+known_limitations:
+  - "Desktop Bridge must be running locally — no cloud alternative"
+  - "Ngrok URL must be manually updated in Vercel env when bridge restarts"
+  - "No user sync across devices — username collision handled first-come-first-serve"
+  - "Smart Connections plugin must be installed and enabled in Obsidian"
+  - "Task parsing assumes Dataview syntax: - [ ] Task 📅 YYYY-MM-DD"
+  - "Voice Readback (TTS) is Phase 2 — not included in this iteration"
+  - "Email/Chat integration is Phase 4 — not included"
+
+next_steps:
+  - "Deploy to Vercel, set env vars"
+  - "Run Soniox quality gate test (Sprint 1 blocker)"
+  - "Test multi-user flow with 2 different usernames"
+  - "Verify Smart Connections auto-linking with existing vault"
+  - "Test task reminder display with Dataview tasks in vault"

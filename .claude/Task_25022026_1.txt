@@ -1,0 +1,12 @@
+Hoàn thiện giao diện về tiếp cận Micro:
+#### Bước 1: Thiết lập kỳ vọng (The Context)
+Khi người dùng chạm vào tính năng Record lần đầu, đừng gọi Micro ngay. Hãy hiện một màn hình chờ (Overlay) tinh tế.
+- **Thông điệp:** _"Chào Hà, để thuận tiện cho bạn tôi cần kết nối với Micro."    
+#### Bước 2: Kích hoạt ý thức (The Bridge)
+Hiện một nút bấm lớn: **[Kích hoạt Micro & Bảo mật]**.
+- **Hành động:** Khi người dùng ấn nút này, con mới gọi lệnh `getUserMedia`.
+#### Bước 3: Neo giữ trạng thái (The Confirmation)
+
+Sau khi họ ấn "Allow", hãy hiện một hiệu ứng sóng âm (Waveform) nhỏ và thông báo:
+- **Thông điệp:** _"Kết nối an toàn thành công"_
+- **Kỹ thuật:** Lúc này hãy lưu `has_allowed_mic = true` vào `localStorage`. Nếu sau này bị iOS thu hồi, con dùng chính giao diện của Bước 1 nhưng đổi nội dung thành: _"Để đảm bảo tính riêng tư, iOS đã tạm ngắt kết nối Micro. Nhấn để tái kết nối."
