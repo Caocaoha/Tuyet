@@ -19,6 +19,18 @@ export class TuyetDatabase extends Dexie {
       audio: 'id, username, createdAt, transcriptionEngine',
       tasks: 'id, username, dueDate, completed, createdAt',
     });
+
+    this.version(3).stores({
+      transcripts: 'id, audioId, username, createdAt, intelligenceApplied, bookmarked',
+      audio: 'id, username, createdAt, transcriptionEngine',
+      tasks: 'id, username, dueDate, completed, createdAt',
+    }).upgrade(tx => {
+      return tx.table('transcripts').toCollection().modify(record => {
+        if (record.bookmarked === undefined) record.bookmarked = false;
+        if (record.bookmarkedAt === undefined) record.bookmarkedAt = null;
+        if (record.lastSyncAttempt === undefined) record.lastSyncAttempt = null;
+      });
+    });
   }
 }
 
@@ -135,6 +147,45 @@ export async function getTasks(
     if (filter.upcoming && task.dueDate >= now && !task.completed) return true;
     return false;
   });
+}
+
+export async function toggleBookmark(
+  username: string,
+  transcriptId: string
+): Promise<void> {
+  const db = await getDb(username);
+  const record = await db.transcripts.get(transcriptId);
+  if (!record) return;
+  const now = new Date().toISOString();
+  await db.transcripts.update(transcriptId, {
+    bookmarked: !record.bookmarked,
+    bookmarkedAt: !record.bookmarked ? now : null,
+  });
+}
+
+export async function updateTranscriptSyncStatus(
+  username: string,
+  transcriptId: string,
+  synced: boolean
+): Promise<void> {
+  const db = await getDb(username);
+  const now = new Date().toISOString();
+  await db.transcripts.update(transcriptId, {
+    savedToObsidian: synced,
+    lastSyncAttempt: now,
+  });
+}
+
+export async function deleteOldRecords(username: string): Promise<number> {
+  const db = await getDb(username);
+  const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+  const old = await db.transcripts
+    .filter(t => !t.bookmarked && t.createdAt < fiveDaysAgo)
+    .toArray();
+  const audioIds = old.map(t => t.audioId);
+  await db.transcripts.bulkDelete(old.map(t => t.id));
+  await db.audio.bulkDelete(audioIds);
+  return old.length;
 }
 
 export async function updateTask(

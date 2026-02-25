@@ -11,6 +11,9 @@ export interface TranscriptRecord {
   autoTags?: string[];
   linkedNotes?: string[];
   intelligenceApplied: boolean;
+  bookmarked?: boolean;
+  bookmarkedAt?: string | null;
+  lastSyncAttempt?: string | null;
 }
 
 export interface AudioRecord {

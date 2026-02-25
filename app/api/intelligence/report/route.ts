@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
     if (!type || !['topic', 'daily', 'weekly'].includes(type)) {
       return NextResponse.json(
-        { error: 'Invalid report type' },
+        { error: 'Invalid report type. Must be: topic, daily, or weekly' },
         { status: 400 }
       );
     }
@@ -32,17 +32,36 @@ export async function POST(req: NextRequest) {
       .replace(/\/$/, '');
     const bridgeKey = process.env.BRIDGE_API_KEY || '';
 
+    if (!bridgeUrl || !bridgeKey) {
+      return NextResponse.json(
+        { error: 'Bridge not configured' },
+        { status: 500 }
+      );
+    }
+
     let searchQuery = '';
-    if (type === 'topic' && topic) {
+    let dateFilter = '';
+
+    if (type === 'topic') {
+      if (!topic || typeof topic !== 'string') {
+        return NextResponse.json(
+          { error: 'Topic is required for topic report' },
+          { status: 400 }
+        );
+      }
       searchQuery = topic;
     } else if (type === 'daily') {
       const today = new Date().toISOString().split('T')[0];
       searchQuery = `path:Tuyet-${username}/${today}`;
+      dateFilter = today;
     } else if (type === 'weekly') {
       const today = new Date();
       const weekAgo = new Date(today);
       weekAgo.setDate(today.getDate() - 7);
+      const startDate = weekAgo.toISOString().split('T')[0];
+      const endDate = today.toISOString().split('T')[0];
       searchQuery = `path:Tuyet-${username}/`;
+      dateFilter = `${startDate}..${endDate}`;
     }
 
     let bridgeResponse: Response;
@@ -56,7 +75,7 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           query: searchQuery,
           username,
-          dateRange,
+          dateRange: dateFilter,
         }),
         signal: AbortSignal.timeout(15000),
       });
@@ -70,19 +89,19 @@ export async function POST(req: NextRequest) {
     if (!bridgeResponse.ok) {
       const text = await bridgeResponse.text();
       return NextResponse.json(
-        { error: `Bridge error ${bridgeResponse.status}: ${text}` },
+        { error: `Bridge search failed (${bridgeResponse.status}): ${text}` },
         { status: 502 }
       );
     }
 
     const searchResult = await bridgeResponse.json();
-    const notes = searchResult.notes || [];
+    const notes = searchResult.notes || searchResult.results || [];
 
     if (notes.length === 0) {
       return NextResponse.json({
-        title: `Báo cáo ${type}`,
-        summary: 'Không tìm thấy ghi chú nào phù hợp.',
-        details: '',
+        title: type === 'topic' ? `Báo cáo: ${topic}` : `Báo cáo ${type}`,
+        summary: 'Không tìm thấy ghi chú nào phù hợp với tiêu chí tìm kiếm.',
+        details: 'Hãy thử lại với tiêu chí khác hoặc kiểm tra xem Obsidian Bridge có đang hoạt động không.',
         sources: [],
         generatedAt: new Date().toISOString(),
       });
@@ -100,14 +119,22 @@ export async function POST(req: NextRequest) {
     const anthropic = new Anthropic({ apiKey: anthropicKey });
 
     const notesContent = notes
-      .map((n: any) => `## ${n.title}\n${n.content || ''}`)
+      .slice(0, 20)
+      .map((n: any) => {
+        const title = n.title || n.name || 'Untitled';
+        const content = n.content || n.text || '';
+        return `## ${title}\n${content}`;
+      })
       .join('\n\n');
 
-    const prompt = type === 'topic'
-      ? `Tạo báo cáo tổng hợp về chủ đề "${topic}" dựa trên các ghi chú sau. Viết phần tóm tắt 3 câu ngắn gọn, sau đó là chi tiết đầy đủ.`
-      : type === 'daily'
-      ? `Tạo báo cáo tổng hợp các hoạt động trong ngày hôm nay. Viết phần tóm tắt 3 câu, sau đó là chi tiết.`
-      : `Tạo báo cáo tổng hợp các hoạt động trong tuần qua. Viết phần tóm tắt 3 câu, sau đó là chi tiết.`;
+    let prompt = '';
+    if (type === 'topic') {
+      prompt = `Tạo báo cáo tổng hợp về chủ đề "${topic}" dựa trên các ghi chú sau. Viết phần tóm tắt 3 câu ngắn gọn, sau đó là chi tiết đầy đủ.`;
+    } else if (type === 'daily') {
+      prompt = `Tạo báo cáo tổng hợp các hoạt động trong ngày hôm nay dựa trên các ghi chú. Viết phần tóm tắt 3 câu, sau đó là chi tiết.`;
+    } else {
+      prompt = `Tạo báo cáo tổng hợp các hoạt động trong tuần qua dựa trên các ghi chú. Viết phần tóm tắt 3 câu, sau đó là chi tiết.`;
+    }
 
     const message = await anthropic.messages.create({
       model: 'claude-3-5-sonnet-20241022',
@@ -141,10 +168,15 @@ DETAILS: [chi tiết đầy đủ]`,
     const summary = parts[0]?.replace('SUMMARY:', '').trim() || '';
     const details = parts[1]?.replace('DETAILS:', '').trim() || responseText;
 
-    const sources = notes.map((n: any) => ({
-      title: n.title,
-      url: n.url || `obsidian://open?vault=${n.vault}&file=${encodeURIComponent(n.path)}`,
-    }));
+    const sources = notes.slice(0, 10).map((n: any) => {
+      const title = n.title || n.name || 'Untitled';
+      const path = n.path || n.file || '';
+      const vault = n.vault || 'default';
+      return {
+        title,
+        url: n.url || `obsidian://open?vault=${vault}&file=${encodeURIComponent(path)}`,
+      };
+    });
 
     return NextResponse.json({
       title: type === 'topic' ? `Báo cáo: ${topic}` : `Báo cáo ${type}`,
@@ -154,6 +186,7 @@ DETAILS: [chi tiết đầy đủ]`,
       generatedAt: new Date().toISOString(),
     });
   } catch (err) {
+    console.error('Report generation error:', err);
     return NextResponse.json(
       { error: `Report generation failed: ${(err as Error).message}` },
       { status: 500 }
