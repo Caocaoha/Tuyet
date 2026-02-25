@@ -1,26 +1,70 @@
 # Tuyet App — Context cho Claude Code
 
-PWA ghi âm → transcribe (AssemblyAI) → lưu note vào Obsidian.
-Stack: Next.js 14 App Router + TypeScript + IndexedDB (Dexie) + Desktop Bridge (Express).
+PWA ghi âm → transcribe (AssemblyAI/Whisper/Soniox) → AI intelligence → lưu note vào Obsidian.
+Stack: Next.js 14 App Router + TypeScript + IndexedDB (Dexie) + Desktop Bridge (Express) + Anthropic Claude API.
 
-## Cấu trúc
+## Branch
+
+- `master` — v1 production (stable)
+- `v2/develop` — v2 development (knowledge assistant)
+
+## Cấu trúc (v2)
 
 ```
 TuyetApp/
-├── app/                    ← Next.js App Router
-│   ├── api/                ← API routes (transcribe, obsidian, auth, config)
-│   ├── (pages)/            ← UI pages
-│   └── layout.tsx
+├── app/
+│   ├── api/
+│   │   ├── auth/               ← login, logout
+│   │   ├── config/             ← status, test-bridge, generate-key
+│   │   ├── corrections/save/   ← lưu correction transcript
+│   │   ├── intelligence/       ← auto-tag, report (Anthropic Claude)
+│   │   ├── meeting/transcribe/ ← transcribe meeting audio
+│   │   ├── obsidian/           ← note, import, meeting, search
+│   │   ├── tasks/              ← task extraction
+│   │   └── transcribe/         ← transcribe audio
+│   ├── recording/              ← trang ghi âm
+│   ├── reports/                ← trang báo cáo AI
+│   ├── review/                 ← xem lại transcript
+│   └── setup/                  ← cấu hình ban đầu
+├── components/
+│   ├── MicButton.tsx           ← nút ghi âm (dùng trong page.tsx)
+│   └── TaskList.tsx            ← hiển thị tasks
 ├── lib/
-│   ├── audio/db.ts         ← IndexedDB schema (Dexie) — stable, không sửa schema
-│   └── ...
-├── middleware.ts            ← Cookie auth, PUBLIC_ROUTES whitelist
-├── public/                 ← PWA icons, manifest
-└── desktop-bridge/         ← Node.js Express server chạy local
+│   ├── audio/db.ts             ← IndexedDB schema v2 (Dexie, per-username)
+│   ├── types.ts                ← shared TypeScript types
+│   ├── api-client.ts           ← client-side API calls
+│   ├── bridge-client.ts        ← Desktop Bridge client
+│   ├── recorder.ts             ← audio recorder utility
+│   ├── hooks/
+│   │   ├── useRecorder.ts      ← recording hook (v2-compatible)
+│   │   └── useOfflineQueue.ts  ← stub (v2 xử lý offline khác)
+│   ├── obsidian/bridge.ts      ← saveNoteToObsidian
+│   ├── whisper/
+│   │   ├── client.ts           ← transcribeAudio (dùng credentials: include)
+│   │   └── whisper-client.ts   ← duplicate, cùng logic
+│   └── tags/detector.ts        ← detectTags, removeTagCommands
+├── middleware.ts               ← Cookie auth, PUBLIC_ROUTES whitelist
+├── public/                     ← PWA icons, manifest
+└── desktop-bridge/             ← Node.js Express server chạy local
     └── src/index.ts
 ```
 
-## Env Variables quan trọng
+## IndexedDB Schema (v2)
+
+`TuyetDatabase` — per-username, database name: `tuyet-{username}`
+
+- **v1**: `transcripts`, `audio`
+- **v2**: thêm `tasks` table; thêm fields: `intelligenceApplied`, `autoTags`, `linkedNotes`, `transcriptionEngine`
+
+Username lấy từ cookie `tuyet_user`. Luôn dùng `getDb(username)` — không có `db` export trực tiếp.
+
+```ts
+const db = await getDb(username);   // lấy db instance
+await saveAudio(username, blob, mimeType, duration);
+await saveTranscript(username, audioId, transcript, engine);
+```
+
+## Env Variables
 
 ```bash
 # .env.local (Next.js)
@@ -29,6 +73,7 @@ BRIDGE_API_KEY=...          # gửi khi gọi Bridge, phải khớp với Bridge
 OBSIDIAN_BRIDGE_URL=...     # localhost:3001 (dev) hoặc ngrok URL (production)
 OPENAI_API_KEY=...
 ASSEMBLYAI_API_KEY=...
+ANTHROPIC_API_KEY=...       # dùng cho intelligence/auto-tag và intelligence/report
 
 # desktop-bridge/.env
 API_KEY=...                 # phải khớp với BRIDGE_API_KEY
@@ -49,22 +94,32 @@ npx tsx src/index.ts
 ngrok http 3000
 ```
 
-## Tính năng đã có
+## Tính năng v2
 
-- **Ghi âm + Transcribe**: mic → AssemblyAI → transcript card trong `app/page.tsx`
-- **Lưu vào Obsidian**: qua Desktop Bridge (`lib/obsidian/bridge.ts` → `saveNoteToObsidian`)
-- **Offline queue**: ghi âm khi mất mạng, sync lại khi có mạng (`lib/hooks/useOfflineQueue.ts`)
-- **Bookmark**: giữ lại transcript khỏi auto-delete 5 ngày (`bookmarkTranscript` trong `lib/audio/db.ts`)
-- **Sync thủ công**: badge "⚠️ Chưa lưu" có nút "↑ Sync" để retry đẩy lên Obsidian (`app/page.tsx`)
-- **Low-confidence review**: desktop-only panel để sửa đoạn transcript kém chính xác
+- **Ghi âm + Transcribe**: mic → API `/api/transcribe` → IndexedDB (`app/page.tsx` + `MicButton.tsx`)
+- **AI Intelligence**: auto-tag + link notes qua Anthropic Claude (`app/api/intelligence/`)
+- **Task extraction**: trích xuất task từ transcript (`app/api/tasks/`)
+- **Report generation**: báo cáo AI từ transcript history (`app/reports/`)
+- **Lưu vào Obsidian**: qua Desktop Bridge (`lib/obsidian/bridge.ts`)
+- **Corrections**: sửa transcript kém chính xác (`app/api/corrections/save/`)
+- **Xem lại**: review transcript history (`app/review/`)
 
 ## Lưu ý quan trọng
 
 - `middleware.ts` PUBLIC_ROUTES phải include `/setup` và `/api/config/*`
-- SDK init (OpenAI, AssemblyAI) PHẢI bên trong function, không ở module level
-- Client fetch PHẢI có `credentials: 'include'` để gửi cookie
+- SDK init (OpenAI, AssemblyAI, Anthropic) PHẢI bên trong function, không ở module level
+- Client fetch PHẢI có `credentials: 'include'` để gửi cookie — KHÔNG dùng `getAuthHeaders()`
 - Desktop Bridge dùng `tsx`, không dùng `ts-node`
-- IndexedDB data đọc thẳng từ client — không qua API server
+- IndexedDB đọc thẳng từ client — không qua API server
+- `ZodError` dùng `.issues` (không phải `.errors`) — zod v4
+- `lib/whisper/client.ts` và `whisper-client.ts` là duplicate — cùng logic
+
+## Deploy
+
+- Platform: Vercel
+- Production (v1): `master` branch → auto-deploy
+- Preview (v2): branch `v2/develop` → deploy thủ công với `vercel --prod`
+- Preview URL: https://tuyet-ashen.vercel.app
 
 ## Pipeline Dobby
 
@@ -76,4 +131,4 @@ Dùng slash commands trong Claude Code:
 - `/hotfix <mô tả lỗi>` — fix lỗi production
 - `/status` — xem trạng thái project
 
-Project memory: `Dobby\projects\tuyet\memory\PROJECT_STATUS.md`
+Project memory v2: `Dobby\projects\tuyet-v2\`
