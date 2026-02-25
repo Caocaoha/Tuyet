@@ -1,8 +1,9 @@
 // app/recording/page.tsx
 'use client';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRecorder } from '@/lib/hooks/useRecorder';
+import { useMicPermission } from '@/lib/hooks/useMicPermission';
 
 function fmt(s: number) {
   return `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
@@ -16,7 +17,20 @@ export default function RecordingPage() {
     startRecording, stopRecording
   } = useRecorder();
 
-  useEffect(() => { startRecording(); }, []);
+  const { permissionState, checkPermission, requestPermission } = useMicPermission();
+  const [permissionChecked, setPermissionChecked] = useState(false);
+
+  // Check permission on mount — no prompt, no getUserMedia outside user gesture
+  useEffect(() => {
+    checkPermission().then(() => setPermissionChecked(true));
+  }, []);
+
+  // Auto-start only if already granted
+  useEffect(() => {
+    if (permissionChecked && permissionState === 'granted') {
+      startRecording();
+    }
+  }, [permissionChecked, permissionState]);
 
   useEffect(() => {
     if (status === 'saved') {
@@ -25,6 +39,90 @@ export default function RecordingPage() {
     }
   }, [status]);
 
+  // User tap handler — safe user gesture for iOS getUserMedia
+  const handleTapToStart = async () => {
+    const granted = await requestPermission();
+    if (granted) startRecording();
+  };
+
+  // Permission checking spinner
+  if (!permissionChecked) {
+    return (
+      <div style={{ minHeight:'100vh', padding:'32px 16px', background: '#fff', display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <div style={{ textAlign:'center', color:'#888' }}>
+          <div style={{ fontSize:32, marginBottom:12 }}>🎙️</div>
+          <p>Đang kiểm tra quyền micro...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Mic denied
+  if (permissionState === 'denied' || permissionState === 'unavailable') {
+    return (
+      <div style={{ minHeight:'100vh', padding:'32px 16px', background: '#fffbeb' }}>
+        <header style={{ marginBottom:32 }}>
+          <button onClick={() => router.push('/')} style={{ background:'none', border:'none', cursor:'pointer', fontSize:14, color:'#666' }}>
+            ← Về trang chủ
+          </button>
+          <h1 style={{ fontSize:28, fontWeight:700, color:'#1e3a5f', margin:'8px 0 0' }}>TUYẾT</h1>
+        </header>
+        <div style={{ maxWidth:400, margin:'0 auto', textAlign:'center' }}>
+          <div style={{ fontSize:48, marginBottom:16 }}>🚫</div>
+          <div style={{
+            background:'#fef3c7', border:'1px solid #f59e0b',
+            borderRadius:10, padding:'16px 20px', marginBottom:24,
+            color:'#92400e', fontSize:14, textAlign:'left'
+          }}>
+            <strong>Quyền micro bị từ chối.</strong><br /><br />
+            Để dùng tính năng ghi âm, hãy vào Cài đặt iPhone → Safari → Microphone → Cho phép, rồi tải lại trang.
+          </div>
+          <button
+            onClick={() => router.push('/')}
+            style={{
+              background:'#1e3a5f', color:'#fff', border:'none',
+              borderRadius:8, padding:'12px 24px', fontSize:15,
+              fontWeight:600, cursor:'pointer'
+            }}
+          >
+            ← Về trang chủ
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Mic needs permission — show tap button (user gesture required for iOS)
+  if (permissionState === 'prompt' || permissionState === 'unknown') {
+    return (
+      <div style={{ minHeight:'100vh', padding:'32px 16px', background: '#fff' }}>
+        <header style={{ marginBottom:32 }}>
+          <button onClick={() => router.push('/')} style={{ background:'none', border:'none', cursor:'pointer', fontSize:14, color:'#666' }}>
+            ← Về trang chủ
+          </button>
+          <h1 style={{ fontSize:28, fontWeight:700, color:'#1e3a5f', margin:'8px 0 0' }}>TUYẾT</h1>
+        </header>
+        <div style={{ maxWidth:400, margin:'0 auto', textAlign:'center' }}>
+          <div style={{ fontSize:48, marginBottom:16 }}>🎙️</div>
+          <p style={{ color:'#555', marginBottom:32 }}>Nhấn để bắt đầu ghi âm</p>
+          <button
+            onClick={handleTapToStart}
+            style={{
+              width:160, height:160, borderRadius:'50%',
+              fontSize:15, fontWeight:600,
+              background:'#3182ce', color:'#fff', border:'none',
+              cursor:'pointer',
+              boxShadow:'0 0 0 8px rgba(49,130,206,0.2)',
+            }}
+          >
+            🎙️{'\n'}Bắt đầu ghi âm
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Permission granted — normal recording UI
   return (
     <div style={{ minHeight:'100vh', padding:'32px 16px', background: status === 'saved' ? '#f0fff4' : '#fff5f5' }}>
       <header style={{ marginBottom:32 }}>

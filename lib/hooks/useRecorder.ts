@@ -85,16 +85,19 @@ export function useRecorder() {
     try { recognitionRef.current?.stop(); } catch {}
     recognitionRef.current = null;
 
+    let blobData: { blob: Blob; duration: number; mimeType: string } | null = null;
+    let timestamp = '';
     try {
-      const { blob, duration, mimeType } = await recorderRef.current.stop();
+      const result = await recorderRef.current.stop();
+      blobData = result;
       recorderRef.current = null;
 
       const now = new Date();
-      const timestamp = now.toISOString();
+      timestamp = now.toISOString();
 
       // Offline path — queue for later processing
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        await saveToOfflineQueue(blob, mimeType, duration, timestamp);
+        await saveToOfflineQueue(blobData.blob, blobData.mimeType, blobData.duration, timestamp);
         setOfflineSaved(true);
         setStatus('saved');
         return;
@@ -102,12 +105,12 @@ export function useRecorder() {
 
       // Online path
       const audioId = await saveAudioRecord({
-        audioBlob: blob, duration,
+        audioBlob: blobData.blob, duration: blobData.duration,
         timestamp, status: 'processing', transcriptId: ''
       });
 
       // Transcribe
-      const whisperResult = await transcribeAudio(blob, mimeType);
+      const whisperResult = await transcribeAudio(blobData.blob, blobData.mimeType);
       const detectedTags = detectTags(whisperResult.transcript);
       const cleanTranscript = removeTagCommands(whisperResult.transcript);
       setTranscript(cleanTranscript);
@@ -144,9 +147,19 @@ export function useRecorder() {
 
       setStatus('saved');
     } catch (err) {
-      setError('Lỗi: ' + (err as Error).message);
-      setStatus('error');
-      stoppingRef.current = false;
+      const isNetworkError =
+        !navigator.onLine ||
+        (err as Error).message?.toLowerCase().includes('fetch') ||
+        (err as Error).name === 'TypeError';
+      if (blobData && isNetworkError) {
+        await saveToOfflineQueue(blobData.blob, blobData.mimeType, blobData.duration, timestamp || new Date().toISOString());
+        setOfflineSaved(true);
+        setStatus('saved');
+      } else {
+        setError('Lỗi: ' + (err as Error).message);
+        setStatus('error');
+        stoppingRef.current = false;
+      }
     }
   }, []);
 

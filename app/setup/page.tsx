@@ -1,11 +1,16 @@
 // app/setup/page.tsx
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function SetupPage() {
   const router = useRouter();
+  const [hasConfig, setHasConfig] = useState(false);
   const [bridgeUrl, setBridgeUrl] = useState('http://localhost:3001');
+
+  useEffect(() => {
+    setHasConfig(!!localStorage.getItem('appConfig'));
+  }, []);
   const [bridgeApiKey, setBridgeApiKey] = useState('');
   const [appApiKey, setAppApiKey] = useState('');
   const [status, setStatus] = useState('');
@@ -64,6 +69,17 @@ export default function SetupPage() {
 
   return (
     <div style={{ padding: 32, maxWidth: 480, margin: '0 auto' }}>
+      {hasConfig && (
+        <button
+          onClick={() => router.push('/')}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: 14, color: '#666', marginBottom: 16, padding: 0,
+          }}
+        >
+          ← Về lịch sử
+        </button>
+      )}
       <h1 style={{ marginBottom: 24 }}>Cài đặt Tuyết</h1>
 
       <div style={{ marginBottom: 16 }}>

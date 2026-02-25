@@ -28,7 +28,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check OpenAI API key
-    if (!process.env.OPENAI_API_KEY) {
+    const apiKey = (process.env.OPENAI_API_KEY || '').trim();
+    if (!apiKey) {
       console.error('OPENAI_API_KEY not set');
       return NextResponse.json(
         {
@@ -39,9 +40,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate API key format
+    if (!apiKey.startsWith('sk-')) {
+      console.error('OPENAI_API_KEY invalid format:', apiKey.substring(0, 50));
+      return NextResponse.json(
+        {
+          error: 'Invalid API key format',
+          code: 'API_KEY_INVALID'
+        },
+        { status: 500 }
+      );
+    }
+
     // Khởi tạo bên trong function để tránh lỗi lúc build
     const OpenAI = (await import('openai')).default;
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = new OpenAI({ apiKey });
     const ext = getExtensionFromMimeType(mimeType);
     const file = new File([audioBuffer], `audio.${ext}`, { type: mimeType });
 

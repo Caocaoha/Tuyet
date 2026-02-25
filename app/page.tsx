@@ -67,6 +67,14 @@ export default function HomePage() {
     }
   }, []);
 
+  const prevIsProcessingRef = useRef(false);
+  useEffect(() => {
+    if (prevIsProcessingRef.current && !isProcessing) {
+      loadFromDB();
+    }
+    prevIsProcessingRef.current = isProcessing;
+  }, [isProcessing, loadFromDB]);
+
   useEffect(() => {
     const config = localStorage.getItem('appConfig');
     if (!config) {
