@@ -1,6 +1,11 @@
 // lib/whisper/client.ts
-import type { TranscriptRecord, ConfidenceSegment } from '@/lib/audio/db';
-import { getAuthHeaders } from '@/lib/api-client';
+
+interface ConfidenceSegment {
+  text: string;
+  confidence: number;
+  start?: number;
+  end?: number;
+}
 
 export interface WhisperResponse {
   transcript: string;
@@ -18,12 +23,12 @@ export async function transcribeAudio(
   try {
     response = await fetch('/api/transcribe', {
       method: 'POST',
+      credentials: 'include',
       headers: {
-        ...getAuthHeaders(),    // ← auth header
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ audio: base64Audio, mimeType }),
-      signal: AbortSignal.timeout(30000)  // 30s timeout cho transcription
+      signal: AbortSignal.timeout(30000)
     });
   } catch (fetchError) {
     throw new Error(`Network error: ${(fetchError as Error).message}`);

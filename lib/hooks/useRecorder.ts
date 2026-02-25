@@ -1,7 +1,7 @@
 // lib/hooks/useRecorder.ts
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { AudioRecorder } from '@/lib/audio/recorder';
-import { saveAudioRecord, saveTranscript, saveToOfflineQueue } from '@/lib/audio/db';
+import { saveAudio, saveTranscript, getDb } from '@/lib/audio/db';
 import { transcribeAudio } from '@/lib/whisper/client';
 import { saveNoteToObsidian } from '@/lib/obsidian/bridge';
 import { detectTags, removeTagCommands } from '@/lib/tags/detector';
@@ -9,6 +9,14 @@ import { detectTags, removeTagCommands } from '@/lib/tags/detector';
 export type RecordingStatus = 'idle' | 'recording' | 'processing' | 'saved' | 'error';
 
 const VOICE_STOP_KEYWORDS = ['save', 'stop'];
+
+function getUsername(): string {
+  if (typeof document === 'undefined') return 'default';
+  return document.cookie
+    .split('; ')
+    .find(row => row.startsWith('tuyet_user='))
+    ?.split('=')[1] || 'default';
+}
 
 export function useRecorder() {
   const [status, setStatus] = useState<RecordingStatus>('idle');
@@ -52,7 +60,6 @@ export function useRecorder() {
         recognition.onresult = (event: any) => {
           for (let i = event.resultIndex; i < event.results.length; i++) {
             const text = event.results[i][0].transcript.toLowerCase().trim();
-            // Voice command detection — scan all results (interim + final)
             if (!voiceCommandRef.current && VOICE_STOP_KEYWORDS.some(kw => text.includes(kw))) {
               voiceCommandRef.current = true;
               setVoiceCommandDetected(event.results[i][0].transcript.trim());
@@ -94,20 +101,18 @@ export function useRecorder() {
 
       const now = new Date();
       timestamp = now.toISOString();
+      const username = getUsername();
 
-      // Offline path — queue for later processing
+      // Offline path — save audio locally and mark as pending
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        await saveToOfflineQueue(blobData.blob, blobData.mimeType, blobData.duration, timestamp);
+        await saveAudio(username, blobData.blob, blobData.mimeType, blobData.duration);
         setOfflineSaved(true);
         setStatus('saved');
         return;
       }
 
       // Online path
-      const audioId = await saveAudioRecord({
-        audioBlob: blobData.blob, duration: blobData.duration,
-        timestamp, status: 'processing', transcriptId: ''
-      });
+      const audioId = await saveAudio(username, blobData.blob, blobData.mimeType, blobData.duration);
 
       // Transcribe
       const whisperResult = await transcribeAudio(blobData.blob, blobData.mimeType);
@@ -115,20 +120,14 @@ export function useRecorder() {
       const cleanTranscript = removeTagCommands(whisperResult.transcript);
       setTranscript(cleanTranscript);
 
-      // Lưu transcript với createdAt
-      const transcriptId = await saveTranscript({
-        audioId,
-        transcript: cleanTranscript,
-        detectedLanguage: whisperResult.detectedLanguage,
-        tags: detectedTags,
-        lowConfidenceSegments: whisperResult.segments.filter(s => s.confidence < 0.7),
-        savedToObsidian: false,
-        obsidianFilePath: '',
-        createdAt: timestamp,
-      });
+      const transcriptId = await saveTranscript(username, audioId, cleanTranscript, 'whisper');
 
-      const { db } = await import('@/lib/audio/db');
-      await db.audioRecords.update(audioId, { transcriptId });
+      // Update transcript with intelligence data
+      const db = await getDb(username);
+      await db.transcripts.update(transcriptId, {
+        autoTags: detectedTags,
+        intelligenceApplied: true,
+      });
 
       // Lưu vào Obsidian
       const obsidianResult = await saveNoteToObsidian(cleanTranscript, detectedTags, now);
@@ -136,12 +135,10 @@ export function useRecorder() {
       if (obsidianResult.success) {
         await db.transcripts.update(transcriptId, {
           savedToObsidian: true,
-          obsidianFilePath: obsidianResult.filePath || ''
+          obsidianFilePath: obsidianResult.filePath || '',
         });
-        await db.audioRecords.update(audioId, { status: 'saved' });
         setObsidianSaved(true);
       } else {
-        await db.audioRecords.update(audioId, { status: 'saved' });
         setError(`Đã lưu local. Obsidian lỗi: ${obsidianResult.error}`);
       }
 
@@ -152,7 +149,8 @@ export function useRecorder() {
         (err as Error).message?.toLowerCase().includes('fetch') ||
         (err as Error).name === 'TypeError';
       if (blobData && isNetworkError) {
-        await saveToOfflineQueue(blobData.blob, blobData.mimeType, blobData.duration, timestamp || new Date().toISOString());
+        const username = getUsername();
+        await saveAudio(username, blobData.blob, blobData.mimeType, blobData.duration);
         setOfflineSaved(true);
         setStatus('saved');
       } else {

@@ -24,7 +24,8 @@ export default function ReviewPage() {
     // Đọc từ IndexedDB trực tiếp — không cần API call
     async function loadFromDB() {
       try {
-        const { db } = await import('@/lib/audio/db');
+        const { getDb } = await import('@/lib/audio/db');
+        const db = await getDb('default');
         const transcripts = await db.transcripts.toArray();
         // Sắp xếp mới nhất lên đầu
         const sorted = transcripts.sort((a, b) =>
