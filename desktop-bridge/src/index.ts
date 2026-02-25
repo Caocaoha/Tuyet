@@ -9,6 +9,7 @@ import healthRouter from './routes/health';
 import notesRouter from './routes/notes';
 import agentRouter from './routes/agent';
 import tasksRouter from './routes/tasks';
+import searchRouter from './routes/search';
 
 dotenv.config();
 
@@ -25,6 +26,7 @@ app.use('/health', healthRouter);
 app.use(authMiddleware);
 app.use('/notes', notesRouter);
 app.use('/tasks', tasksRouter);
+app.use('/search', searchRouter);
 app.use('/agent', agentRouter);
 
 app.listen(PORT, () => {
