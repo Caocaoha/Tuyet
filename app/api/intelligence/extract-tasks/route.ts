@@ -28,14 +28,15 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: 'user',
-          content: `Trích xuất TẤT CẢ việc cần làm từ văn bản sau. Bao gồm mọi câu có dạng: "nhắc tôi...", "cần làm...", "phải làm...", "việc cần làm là...", "cần nhớ...", "đừng quên...", "làm ơn...", "hãy...".
+          content: `Đây là ứng dụng ghi chú bằng giọng nói. Người dùng nói ra để tạo việc cần làm (task). Hãy trích xuất TẤT CẢ các task từ văn bản sau.
 
-Ví dụ:
+Quy tắc:
+- Bất kỳ hành động nào cũng là task, dù có hay không có "nhắc tôi", "cần", "phải"
+- "Đi ngủ" → task, "Đi chạy" → task, "Tập gym" → task
 - "Nhắc tôi mua sữa" → task: "Mua sữa"
-- "Việc cần làm là gọi điện cho khách" → task: "Gọi điện cho khách"
-- "Nhắc tôi đi ngủ trước 12h tối nay" → task: "Đi ngủ trước 12h tối nay"
-- "Cần đặt vé máy bay ngày mai" → task: "Đặt vé máy bay"
-- "Đừng quên nộp báo cáo thứ Sáu" → task: "Nộp báo cáo thứ Sáu"
+- "Việc cần làm là gọi điện" → task: "Gọi điện"
+- "Đừng quên nộp báo cáo thứ Sáu" → task: "Nộp báo cáo thứ Sáu", dueDate: ngày thứ Sáu gần nhất
+- Nếu có ngày giờ cụ thể → điền dueDate dạng YYYY-MM-DD, nếu không → null
 
 Chỉ trả về JSON:
 {"tasks": [{"content": "tên task", "dueDate": "YYYY-MM-DD hoặc null"}]}

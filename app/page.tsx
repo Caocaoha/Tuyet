@@ -59,20 +59,18 @@ export default function HomePage() {
 
       setStatus('saving');
 
-      const enableIntelligence = process.env.NEXT_PUBLIC_ENABLE_INTELLIGENCE === 'true';
       let tags: string[] = [];
       let extractedTasks: Array<{ content: string; dueDate?: string | null }> = [];
 
-      if (enableIntelligence) {
-        const [tagResult, taskResult] = await Promise.allSettled([
-          analyzeForTags(transcript),
-          extractTasks(transcript),
-        ]);
-        if (tagResult.status === 'fulfilled') tags = tagResult.value.tags;
-        else console.warn('Auto-tag failed:', tagResult.reason);
-        if (taskResult.status === 'fulfilled') extractedTasks = taskResult.value;
-        else console.warn('Extract-tasks failed:', taskResult.reason);
-      }
+      // Always call API — server decides based on NEXT_PUBLIC_ENABLE_INTELLIGENCE
+      const [tagResult, taskResult] = await Promise.allSettled([
+        analyzeForTags(transcript),
+        extractTasks(transcript),
+      ]);
+      if (tagResult.status === 'fulfilled') tags = tagResult.value.tags;
+      else console.warn('Auto-tag failed:', tagResult.reason);
+      if (taskResult.status === 'fulfilled') extractedTasks = taskResult.value;
+      else console.warn('Extract-tasks failed:', taskResult.reason);
 
       // Build note content: transcript + task list (if any)
       let noteContent = transcript;
