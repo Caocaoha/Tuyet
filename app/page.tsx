@@ -98,14 +98,27 @@ export default function HomePage() {
     setStatus('error');
   };
 
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+    router.push('/setup');
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       <div className="max-w-2xl mx-auto px-4 py-8">
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Tuyết v2</h1>
-          {username && (
-            <p className="text-gray-600">👋 Xin chào, {username}</p>
-          )}
+        <header className="mb-8 flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">Tuyết v2</h1>
+            {username && (
+              <p className="text-gray-600">👋 Xin chào, {username}</p>
+            )}
+          </div>
+          <button
+            onClick={handleLogout}
+            className="text-sm text-gray-400 hover:text-gray-600 transition-colors mt-1"
+          >
+            Đăng xuất
+          </button>
         </header>
 
         <div className="space-y-6">

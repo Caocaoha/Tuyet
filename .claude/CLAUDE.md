@@ -114,6 +114,23 @@ ngrok http 3000
 - `ZodError` dùng `.issues` (không phải `.errors`) — zod v4
 - `lib/whisper/client.ts` và `whisper-client.ts` là duplicate — cùng logic
 
+## Production Bug Fixes (round 1 — 2026-02-25)
+
+### BUG-001: "User not authenticated" khi ghi âm
+**Root cause:** Cookie `tuyet_user` có `httpOnly: true` → `document.cookie` không đọc được → `username` luôn `null`
+**Fix:** Đổi thành `httpOnly: false` trong `app/api/auth/login/route.ts` — username không phải secret, bảo mật thực sự đến từ server-side middleware
+**File:** `app/api/auth/login/route.ts`
+
+### BUG-002: HTTP 502 "Cannot POST /tasks" từ Bridge
+**Root cause:** `desktop-bridge/src/index.ts` không có `/tasks` route — Next.js gọi `POST ${bridgeUrl}/tasks` nhưng Bridge trả 404
+**Fix:** Tạo `desktop-bridge/src/routes/tasks.ts` (scan vault cho `- [ ] tasks`) + đăng ký trong `index.ts`
+**Files:** `desktop-bridge/src/routes/tasks.ts` (new), `desktop-bridge/src/index.ts`
+
+### BUG-003: Không có nút Đăng xuất
+**Root cause:** UI thiếu logout button — user bị kẹt khi auth fail, không có cách reset
+**Fix:** Thêm button "Đăng xuất" vào header `app/page.tsx` — gọi `POST /api/auth/logout` rồi redirect `/setup`
+**File:** `app/page.tsx`
+
 ## Deploy
 
 - Platform: Vercel

@@ -8,6 +8,7 @@ import { authMiddleware } from './middleware/auth';
 import healthRouter from './routes/health';
 import notesRouter from './routes/notes';
 import agentRouter from './routes/agent';
+import tasksRouter from './routes/tasks';
 
 dotenv.config();
 
@@ -23,6 +24,7 @@ app.use('/health', healthRouter);
 // Protected routes
 app.use(authMiddleware);
 app.use('/notes', notesRouter);
+app.use('/tasks', tasksRouter);
 app.use('/agent', agentRouter);
 
 app.listen(PORT, () => {

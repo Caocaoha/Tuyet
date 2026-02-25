@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
     const response = NextResponse.json({ success: true, username });
     response.cookies.set('tuyet_user', username, {
-      httpOnly: true,
+      httpOnly: false,  // must be readable by document.cookie client-side
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 365,
