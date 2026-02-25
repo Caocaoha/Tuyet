@@ -17,51 +17,37 @@ export async function POST(req: NextRequest) {
 
     if (actualEngine === 'soniox') {
       const sonioxKey = process.env.SONIOX_API_KEY;
-      if (!sonioxKey) {
-        return NextResponse.json(
-          { error: 'Soniox API key not configured' },
-          { status: 500 }
-        );
+      if (sonioxKey) {
+        try {
+          const response = await fetch('https://api.soniox.com/transcribe-async', {
+            method: 'POST',
+            headers: {
+              'Authorization': `ApiKey ${sonioxKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              audio: audio,
+              model: 'vi_v2',
+              enable_streaming: false,
+            }),
+            signal: AbortSignal.timeout(60000),
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            return NextResponse.json({
+              transcript: result.transcript || result.text || '',
+              engine: 'soniox',
+              confidence: result.confidence,
+            });
+          }
+          // Non-2xx from Soniox → fall through to Whisper
+          console.warn(`Soniox failed (${response.status}), falling back to Whisper`);
+        } catch {
+          // Network error or timeout → fall through to Whisper
+          console.warn('Soniox unreachable, falling back to Whisper');
+        }
       }
-
-      const audioBuffer = Buffer.from(audio, 'base64');
-
-      let response: Response;
-      try {
-        response = await fetch('https://api.soniox.com/transcribe-async', {
-          method: 'POST',
-          headers: {
-            'Authorization': `ApiKey ${sonioxKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            audio: audio,
-            model: 'vi_v2',
-            enable_streaming: false,
-          }),
-          signal: AbortSignal.timeout(60000),
-        });
-      } catch (fetchErr) {
-        return NextResponse.json(
-          { error: `Soniox unreachable: ${(fetchErr as Error).message}` },
-          { status: 503 }
-        );
-      }
-
-      if (!response.ok) {
-        const text = await response.text();
-        return NextResponse.json(
-          { error: `Soniox error ${response.status}: ${text}` },
-          { status: 502 }
-        );
-      }
-
-      const result = await response.json();
-      return NextResponse.json({
-        transcript: result.transcript || result.text || '',
-        engine: 'soniox',
-        confidence: result.confidence,
-      });
     }
 
     const openaiKey = process.env.OPENAI_API_KEY;
