@@ -4,6 +4,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { bookmarkTranscript, cleanupExpiredRecords, updateTranscriptSegment } from '@/lib/audio/db';
+import { saveNoteToObsidian } from '@/lib/obsidian/bridge';
 import type { ConfidenceSegment } from '@/lib/audio/db';
 import { useOfflineQueue } from '@/lib/hooks/useOfflineQueue';
 
@@ -44,6 +45,7 @@ export default function HomePage() {
   const [corrections, setCorrections] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [syncingId, setSyncingId] = useState<string | null>(null);
 
   // Pull-to-refresh state
   const touchStartY = useRef(0);
@@ -125,6 +127,23 @@ export default function HomePage() {
       setDismissed(prev => new Set(prev).add(key));
     } finally {
       setSavingId(null);
+    }
+  };
+
+  const handleSyncToObsidian = async (r: TranscriptRecord) => {
+    setSyncingId(r.id);
+    try {
+      const result = await saveNoteToObsidian(r.transcript, r.tags, new Date(r.createdAt));
+      if (result.success) {
+        const { db } = await import('@/lib/audio/db');
+        await db.transcripts.update(r.id, {
+          savedToObsidian: true,
+          obsidianFilePath: result.filePath || '',
+        });
+        await loadFromDB();
+      }
+    } finally {
+      setSyncingId(null);
     }
   };
 
@@ -244,9 +263,27 @@ export default function HomePage() {
                 {r.createdAt ? new Date(r.createdAt).toLocaleString('vi-VN') : 'Không rõ thời gian'}
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 12, color: r.savedToObsidian ? '#38a169' : '#e53e3e' }}>
-                  {r.savedToObsidian ? '✅ Đã lưu' : '⚠️ Chưa lưu'}
-                </span>
+                {r.savedToObsidian ? (
+                  <span style={{ fontSize: 12, color: '#38a169' }}>✅ Đã lưu</span>
+                ) : (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 12, color: '#e53e3e' }}>⚠️ Chưa lưu</span>
+                    <button
+                      onClick={() => handleSyncToObsidian(r)}
+                      disabled={syncingId === r.id}
+                      style={{
+                        fontSize: 11, padding: '2px 7px',
+                        background: syncingId === r.id ? '#e2e8f0' : '#ebf8ff',
+                        color: syncingId === r.id ? '#999' : '#2b6cb0',
+                        border: '1px solid #bee3f8',
+                        borderRadius: 4,
+                        cursor: syncingId === r.id ? 'default' : 'pointer',
+                      }}
+                    >
+                      {syncingId === r.id ? '...' : '↑ Sync'}
+                    </button>
+                  </span>
+                )}
                 <button
                   onClick={() => handleBookmark(r.id, r.bookmarked)}
                   style={{
