@@ -68,6 +68,20 @@ export async function saveToObsidian(
   });
 }
 
+export async function extractTasks(
+  transcript: string
+): Promise<Array<{ content: string; dueDate?: string | null }>> {
+  const result = await apiCall<{ tasks: Array<{ content: string; dueDate?: string | null }> }>(
+    '/api/intelligence/extract-tasks',
+    {
+      method: 'POST',
+      body: JSON.stringify({ transcript }),
+      signal: AbortSignal.timeout(30000),
+    }
+  );
+  return result.tasks || [];
+}
+
 export async function generateReport(
   request: {
     topic?: string;

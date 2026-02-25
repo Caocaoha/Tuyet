@@ -12,6 +12,7 @@ import {
 import {
   transcribeAudio,
   analyzeForTags,
+  extractTasks,
   saveToObsidian,
 } from '@/lib/api-client';
 
@@ -60,17 +61,31 @@ export default function HomePage() {
 
       const enableIntelligence = process.env.NEXT_PUBLIC_ENABLE_INTELLIGENCE === 'true';
       let tags: string[] = [];
-      
+      let extractedTasks: Array<{ content: string; dueDate?: string | null }> = [];
+
       if (enableIntelligence) {
         try {
-          const tagResult = await analyzeForTags(transcript);
+          const [tagResult, taskResult] = await Promise.all([
+            analyzeForTags(transcript),
+            extractTasks(transcript),
+          ]);
           tags = tagResult.tags;
+          extractedTasks = taskResult;
         } catch (tagErr) {
-          console.warn('Auto-tag failed:', tagErr);
+          console.warn('Intelligence pipeline failed:', tagErr);
         }
       }
 
-      const saveResult = await saveToObsidian(transcript, tags, true);
+      // Build note content: transcript + task list (if any)
+      let noteContent = transcript;
+      if (extractedTasks.length > 0) {
+        const taskLines = extractedTasks
+          .map(t => `- [ ] ${t.content}${t.dueDate ? ` 📅 ${t.dueDate}` : ''}`)
+          .join('\n');
+        noteContent += `\n\nTasks:\n${taskLines}`;
+      }
+
+      const saveResult = await saveToObsidian(noteContent, tags, true);
 
       if (saveResult.success) {
         await updateTranscriptIntelligence(username, transcriptId, {
