@@ -24,18 +24,23 @@ export async function POST(req: NextRequest) {
 
     const message = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
+      max_tokens: 512,
       messages: [
         {
           role: 'user',
-          content: `Trích xuất các công việc cần làm (action items/tasks) từ nội dung sau. Nếu không có tasks thì trả về mảng rỗng.
+          content: `Trích xuất TẤT CẢ việc cần làm từ văn bản sau. Bao gồm mọi câu có dạng: "nhắc tôi...", "cần làm...", "phải làm...", "việc cần làm là...", "cần nhớ...", "đừng quên...", "làm ơn...", "hãy...".
 
-Trả về JSON theo format:
+Ví dụ:
+- "Nhắc tôi mua sữa" → task: "Mua sữa"
+- "Việc cần làm là gọi điện cho khách" → task: "Gọi điện cho khách"
+- "Nhắc tôi đi ngủ trước 12h tối nay" → task: "Đi ngủ trước 12h tối nay"
+- "Cần đặt vé máy bay ngày mai" → task: "Đặt vé máy bay"
+- "Đừng quên nộp báo cáo thứ Sáu" → task: "Nộp báo cáo thứ Sáu"
+
+Chỉ trả về JSON:
 {"tasks": [{"content": "tên task", "dueDate": "YYYY-MM-DD hoặc null"}]}
 
-Chỉ trả về JSON, không giải thích.
-
-Nội dung:
+Văn bản:
 ${transcript}`,
         },
       ],
@@ -46,7 +51,6 @@ ${transcript}`,
       return NextResponse.json({ tasks: [] });
     }
 
-    // Extract JSON object from anywhere in Claude's response (handles markdown fences, extra text)
     const jsonMatch = content.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       return NextResponse.json({ tasks: [] });

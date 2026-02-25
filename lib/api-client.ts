@@ -97,7 +97,7 @@ export async function generateReport(
   return apiCall('/api/intelligence/report', {
     method: 'POST',
     body: JSON.stringify(request),
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(90000),
   });
 }
 

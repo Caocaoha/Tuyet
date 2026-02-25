@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
           username,
           dateRange: dateFilter,
         }),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(30000),
       });
     } catch (fetchErr) {
       return NextResponse.json(
@@ -118,11 +118,12 @@ export async function POST(req: NextRequest) {
     const Anthropic = (await import('@anthropic-ai/sdk')).default;
     const anthropic = new Anthropic({ apiKey: anthropicKey });
 
+    // Limit to 10 notes, 800 chars each to avoid Claude timeout
     const notesContent = notes
-      .slice(0, 20)
+      .slice(0, 10)
       .map((n: any) => {
         const title = n.title || n.name || 'Untitled';
-        const content = n.content || n.text || '';
+        const content = (n.content || n.text || '').slice(0, 800);
         return `## ${title}\n${content}`;
       })
       .join('\n\n');
@@ -138,7 +139,7 @@ export async function POST(req: NextRequest) {
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
+      max_tokens: 2048,
       messages: [
         {
           role: 'user',
