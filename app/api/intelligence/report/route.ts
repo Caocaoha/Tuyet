@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       searchQuery = topic;
     } else if (type === 'daily') {
       const today = new Date().toISOString().split('T')[0];
-      searchQuery = `path:Tuyet-${username}/${today}`;
+      searchQuery = '';
       dateFilter = today;
     } else if (type === 'weekly') {
       const today = new Date();
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       weekAgo.setDate(today.getDate() - 7);
       const startDate = weekAgo.toISOString().split('T')[0];
       const endDate = today.toISOString().split('T')[0];
-      searchQuery = `path:Tuyet-${username}/`;
+      searchQuery = '';
       dateFilter = `${startDate}..${endDate}`;
     }
 

@@ -12,21 +12,22 @@ interface SearchResult {
   lastModified: string;
 }
 
+function parseLocalDate(dateStr: string, endOfDay: boolean): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  // Use local time to avoid UTC midnight timezone issues (e.g. UTC+7)
+  return new Date(year, month - 1, day, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
+}
+
 function parseDateRange(dateRange: string): { start: Date | null; end: Date | null } {
   if (!dateRange) return { start: null, end: null };
 
   if (dateRange.includes('..')) {
     const [startStr, endStr] = dateRange.split('..');
-    const end = new Date(endStr);
-    end.setHours(23, 59, 59, 999);
-    return { start: new Date(startStr), end };
+    return { start: parseLocalDate(startStr, false), end: parseLocalDate(endStr, true) };
   }
 
-  // Single date
-  const start = new Date(dateRange);
-  const end = new Date(dateRange);
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
+  // Single date — full day in local time
+  return { start: parseLocalDate(dateRange, false), end: parseLocalDate(dateRange, true) };
 }
 
 async function searchVault(

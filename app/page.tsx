@@ -64,16 +64,14 @@ export default function HomePage() {
       let extractedTasks: Array<{ content: string; dueDate?: string | null }> = [];
 
       if (enableIntelligence) {
-        try {
-          const [tagResult, taskResult] = await Promise.all([
-            analyzeForTags(transcript),
-            extractTasks(transcript),
-          ]);
-          tags = tagResult.tags;
-          extractedTasks = taskResult;
-        } catch (tagErr) {
-          console.warn('Intelligence pipeline failed:', tagErr);
-        }
+        const [tagResult, taskResult] = await Promise.allSettled([
+          analyzeForTags(transcript),
+          extractTasks(transcript),
+        ]);
+        if (tagResult.status === 'fulfilled') tags = tagResult.value.tags;
+        else console.warn('Auto-tag failed:', tagResult.reason);
+        if (taskResult.status === 'fulfilled') extractedTasks = taskResult.value;
+        else console.warn('Extract-tasks failed:', taskResult.reason);
       }
 
       // Build note content: transcript + task list (if any)

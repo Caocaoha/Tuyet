@@ -46,8 +46,12 @@ ${transcript}`,
       return NextResponse.json({ tasks: [] });
     }
 
-    const jsonText = content.text.trim().replace(/^```json\n?/, '').replace(/\n?```$/, '');
-    const parsed = JSON.parse(jsonText);
+    // Extract JSON object from anywhere in Claude's response (handles markdown fences, extra text)
+    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      return NextResponse.json({ tasks: [] });
+    }
+    const parsed = JSON.parse(jsonMatch[0]);
     const tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
 
     return NextResponse.json({ tasks });
